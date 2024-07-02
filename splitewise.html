@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Splitwise App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1, h2 {
+            text-align: center;
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 20px;
+        }
+
+        input, select, button {
+            padding: 10px;
+            margin: 5px 0;
+        }
+
+        #userList, #expenseList {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        #splitBetween {
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        #splitBetween label {
+            margin: 5px;
+        }
+
+        .expense {
+            border: 1px solid #ddd;
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+
+        th, td {
+            padding: 8px;
+            text-align: left;
+        }
+
+        .summary-item {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Splitwise App</h1>
+
+        <h2>Add Users</h2>
+        <form id="addUserForm">
+            <input type="text" id="userName" placeholder="Enter user name" required>
+            <button type="submit">Add User</button>
+        </form>
+        <ul id="userList"></ul>
+
+        <h2>Add Expense</h2>
+        <form id="addExpenseForm">
+            <input type="number" id="amount" placeholder="Enter amount" required>
+            <select id="payer" required></select>
+            <input type="text" id="description" placeholder="Enter description" required>
+            <div id="splitBetween"></div>
+            <button type="submit">Add Expense</button>
+        </form>
+        <ul id="expenseList"></ul>
+        <button id="calculateButton">Calculate</button>
+
+        <h2>Summary</h2>
+        <div id="summary"></div>
+        <table id="detailedSummary"></table>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const users = [];
+            const expenses = [];
+
+            const addUserForm = document.getElementById("addUserForm");
+            const userNameInput = document.getElementById("userName");
+            const userList = document.getElementById("userList");
+            const payerSelect = document.getElementById("payer");
+            const splitBetweenDiv = document.getElementById("splitBetween");
+
+            const addExpenseForm = document.getElementById("addExpenseForm");
+            const amountInput = document.getElementById("amount");
+            const descriptionInput = document.getElementById("description");
+            const expenseList = document.getElementById("expenseList");
+            const calculateButton = document.getElementById("calculateButton");
+            const summaryDiv = document.getElementById("summary");
+            const detailedSummaryTable = document.getElementById("detailedSummary");
+
+            function renderUsers() {
+                userList.innerHTML = '';
+                payerSelect.innerHTML = '';
+                splitBetweenDiv.innerHTML = '';
+
+                users.forEach(user => {
+                    const li = document.createElement("li");
+                    li.textContent = user;
+                    userList.appendChild(li);
+
+                    const option = document.createElement("option");
+                    option.value = user;
+                    option.textContent = user;
+                    payerSelect.appendChild(option);
+
+                    const label = document.createElement("label");
+                    label.textContent = user;
+                    const checkbox = document.createElement("input");
+                    checkbox.type = "checkbox";
+                    checkbox.value = user;
+                    checkbox.checked = true;
+                    label.appendChild(checkbox);
+                    splitBetweenDiv.appendChild(label);
+                });
+            }
+
+            function renderExpenses() {
+                expenseList.innerHTML = '';
+
+                expenses.forEach((expense, index) => {
+                    const li = document.createElement("li");
+                    li.className = 'expense';
+                    li.textContent = `Amount: $${expense.amount.toFixed(2)}, Payer: ${expense.payer}, Description: ${expense.description}, Split between: ${expense.splitBetween.join(", ")}`;
+                    expenseList.appendChild(li);
+                });
+            }
+
+            function calculateSummary() {
+                const balances = {};
+                users.forEach(user => balances[user] = 0);
+
+                expenses.forEach(expense => {
+                    const amountPerPerson = expense.amount / expense.splitBetween.length;
+                    expense.splitBetween.forEach(user => {
+                        balances[user] -= amountPerPerson;
+                    });
+                    balances[expense.payer] += expense.amount;
+                });
+
+                summaryDiv.innerHTML = '';
+                detailedSummaryTable.innerHTML = '';
+                const transactions = [];
+
+                // Compute who owes whom
+                users.forEach(user => {
+                    if (balances[user] > 0) {
+                        users.forEach(otherUser => {
+                            if (user !== otherUser && balances[otherUser] < 0) {
+                                const amount = Math.min(balances[user], -balances[otherUser]);
+                                if (amount > 0) {
+                                    transactions.push({ from: otherUser, to: user, amount });
+                                    balances[user] -= amount;
+                                    balances[otherUser] += amount;
+                                }
+                            }
+                        });
+                    }
+                });
+
+                users.forEach(user => {
+                    const div = document.createElement("div");
+                    div.className = 'summary-item';
+                    div.textContent = `${user}: ${balances[user].toFixed(2)}`;
+                    summaryDiv.appendChild(div);
+                });
+
+                if (transactions.length > 0) {
+                    const headerRow = document.createElement("tr");
+                    const fromHeader = document.createElement("th");
+                    const toHeader = document.createElement("th");
+                    const amountHeader = document.createElement("th");
+
+                    fromHeader.textContent = "From";
+                    toHeader.textContent = "To";
+                    amountHeader.textContent = "Amount";
+
+                    headerRow.appendChild(fromHeader);
+                    headerRow.appendChild(toHeader);
+                    headerRow.appendChild(amountHeader);
+                    detailedSummaryTable.appendChild(headerRow);
+
+                    transactions.forEach(transaction => {
+                        const row = document.createElement("tr");
+                        const fromCell = document.createElement("td");
+                        const toCell = document.createElement("td");
+                        const amountCell = document.createElement("td");
+
+                        fromCell.textContent = transaction.from;
+                        toCell.textContent = transaction.to;
+                        amountCell.textContent = `$${transaction.amount.toFixed(2)}`;
+
+                        row.appendChild(fromCell);
+                        row.appendChild(toCell);
+                        row.appendChild(amountCell);
+                        detailedSummaryTable.appendChild(row);
+                    });
+                } else {
+                    const noTransactionsRow = document.createElement("tr");
+                    const noTransactionsCell = document.createElement("td");
+                    noTransactionsCell.colSpan = 3;
+                    noTransactionsCell.textContent = "No transactions needed.";
+                    detailedSummaryTable.appendChild(noTransactionsRow);
+                }
+            }
+
+            addUserForm.addEventListener("submit", event => {
+                event.preventDefault();
+                const userName = userNameInput.value.trim();
+                if (userName && !users.includes(userName)) {
+                    users.push(userName);
+                    renderUsers();
+                    userNameInput.value = '';
+                }
+            });
+
+            addExpenseForm.addEventListener("submit", event => {
+                event.preventDefault();
+                const amount = parseFloat(amountInput.value);
+                const payer = payerSelect.value;
+                const description = descriptionInput.value.trim();
+                const splitBetween = Array.from(splitBetweenDiv.querySelectorAll("input:checked")).map(input => input.value);
+
+                if (amount > 0 && payer && description && splitBetween.length > 0) {
+                    expenses.push({ amount, payer, description, splitBetween });
+                    renderExpenses();
+                    amountInput.value = '';
+                    descriptionInput.value = '';
+                }
+            });
+
+            calculateButton.addEventListener("click", () => {
+                calculateSummary();
+            });
+        });
+    </script>
+</body>
+</html>
